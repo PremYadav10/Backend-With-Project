@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { response } from 'express';
 import fs from "fs";
 
 // Configuration
@@ -13,12 +12,12 @@ const uploadOnCloudinary = async (localFilePath)=> {
     try {
         if(!localFilePath) return null;
         //upload file on cloudinary
-        await cloudinary.uploader.upload
-        (localFilePath,{
+        const response = await cloudinary.uploader.upload(localFilePath,{
         resource_type:'auto'
        })
        //file as been uploaded
-       console.log("filr is uploaded on cloudinary",response.url);
+        //console.log("file is uploaded on cloudinary URL:",response.url);
+        fs.unlinkSync(localFilePath);
        return response;
     
     } catch (error) {
@@ -27,19 +26,4 @@ const uploadOnCloudinary = async (localFilePath)=> {
     }
 }
 
-
-
-
-
-// Upload an image
-     const uploadResult = await cloudinary.uploader
-       .upload(
-           'https://res.cloudinary.com/demo/image/upload/getting-started/shoes.jpg', {
-               public_id: 'shoes',
-           }
-       )
-       .catch((error) => {
-           console.log(error);
-       });
-    
-    console.log(uploadResult);
+export {uploadOnCloudinary}
