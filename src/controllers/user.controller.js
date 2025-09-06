@@ -1,6 +1,7 @@
 import {asyncHandler} from '../utils/asyncHandler.js';
 import {ApiError} from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
+import {Subscription} from "../models/subscriptions.model.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponse.js"
 import jwt from 'jsonwebtoken';
@@ -151,8 +152,14 @@ const logoutUser = asyncHandler(async(req,res)=>{
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set:{
-                refreshToken:undefined
+            // $set:{
+            //     refreshToken:undefined
+            // }
+            
+            //alternate and best approch
+
+            $unset:{
+                refreshToken:1 //remove field from document
             }
         },{
             new:true
@@ -248,33 +255,42 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 
 })
 
-const getCurrentUser = asyncHandler(async()=>{
+const getCurrentUser = asyncHandler(async(req,res)=>{
     return res.status(200)
-    .json(200,req.user,"current user fatched")
+            .json(
+                new ApiResponse(200,
+                    req.user,
+                    "current user fatched")
+            )
 })
 
 const updateAcoountDetails = asyncHandler(async(req,res)=>{
     const {fullname,email} = req.body
 
-    if(!fullname || !email){
+    if(!(fullname && email)){
         throw new ApiError(400,"email and fullname is required")
     }
 
-    const user = User.findByIdAndUpdate(
-        req.user?._id,
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
         {
             $set:{
                 fullname:fullname,
                 email:email
             }
-        },{
+        },
+        {
             new:true
         }
     ).select("-password")
 
     return res
     .status(200)
-    .json(new ApiResponse(200,user,"Acoount details updated succesfully"))
+    .json(new ApiResponse(200,
+        user,
+        "Acoount details updated succesfully"
+    ))
+    
 })
 
 const updateUserAvatar = asyncHandler(async(req,res)=>{
@@ -283,6 +299,8 @@ const updateUserAvatar = asyncHandler(async(req,res)=>{
     if(!avatarLocalPath){
         throw new ApiError(400,"avatar file is missing")
     }
+
+    // TODO :  delete old image from cloud
 
     const avatar = await uploadOnCloudinary(avatarLocalPath)
 
@@ -391,11 +409,14 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
         }
     ])
 
+
+    console.log("channel inside getUserChannelProfile :",channel);
+
     if(!channel?.length){
         throw new ApiError(404,"channel does not exists")
     }
 
-    console.log("channel inside getUserChannelProfile :",channel);
+    
     
     return res
     .status(200)
