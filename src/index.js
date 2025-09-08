@@ -21,26 +21,20 @@ connectDB()
 
 
 
+ /* alternate way to connect to mongoDB  */
+// import express from "express";
+// const app = express();
 
-
-
-
-
-
- /*
-import express from "express";
-const app = express();
-
-( async () => {
-    try {
-        await mongoose.connect(`${process.env.MONGODB_URI} / ${DB_NAME}`);
-        app.on("error :",(error)=>{
-            console.log("error : ",error);
-            throw error;
-        })
-    } catch (error) {
-        console.error("error",error)
-        throw error;
-    }
-})()
-    */
+// ( async () => {
+//     try {
+//         await mongoose.connect(`${process.env.MONGODB_URI} / ${DB_NAME}`);
+//         app.on("error :",(error)=>{
+//             console.log("error : ",error);
+//             throw error;
+//         })
+//     } catch (error) {
+//         console.error("error",error)
+//         throw error;
+//     }
+// })()
+//     */
