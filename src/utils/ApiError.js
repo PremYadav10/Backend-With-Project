@@ -1,7 +1,11 @@
 import { Error } from "mongoose";
 
 class ApiError extends Error{
-    constructor(statusCode,message = "somthing went wrong" , errors = [], stack = ""){
+    constructor(statusCode,
+                message = "somthing went wrong" , 
+                errors = [], 
+                stack = ""){
+                    
         super(message)
         this.statusCode = statusCode
         this.data = null
