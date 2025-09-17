@@ -4,12 +4,84 @@ import {User} from "../models/user.model.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
-import {deleteFromCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js"
-
+import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
-    //TODO: get all videos based on query, sort, pagination
+        //TODO: get all videos based on query, sort, pagination
+
+    const filter = {}
+    if (query) {
+        filter.$or = [
+            { title: { $regex: query, $options: "i" } },
+            { description: { $regex: query, $options: "i" } }
+        ]
+    }
+
+    if (userId) {
+        filter.owner = new mongoose.Types.ObjectId(userId)
+    }
+
+    const sort = {}
+    if (sortBy) {
+        sort[sortBy] = sortType === "asc" ? 1 : -1
+    } else {
+        sort.createdAt = -1
+    }
+
+    const videos = await Video.aggregate([
+        { $match: filter },
+
+        // populate owner (like populate in mongoose)
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner"
+            }
+        },
+        { $unwind: "$owner" },  // flatten owner array
+        {
+            $project: {
+                title: 1,
+                description: 1,
+                views: 1,
+                createdAt: 1,
+                "owner._id": 1,
+                "owner.username": 1,
+                "owner.avatar": 1
+            }
+        },
+
+        { $sort: sort },
+        { $skip: (page - 1) * parseInt(limit) },
+        { $limit: parseInt(limit) }
+    ])
+
+    //Alternative using mongoose populate
+    // const videos = await Video.find(filter)
+    //     .populate("owner", "username avatar")
+    //     .sort(sort)
+    //     .skip((page - 1) * parseInt(limit))
+    //     .limit(parseInt(limit))
+
+    // count total documents (separate because pagination)
+    const totalVideos = await Video.countDocuments(filter)
+    const totalPages = Math.ceil(totalVideos / parseInt(limit))
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                videos,
+                totalVideos,
+                totalPages,
+                currentPage: parseInt(page)
+            },
+            "Videos are fetched successfully !!"
+        )
+    )
 })
 
 const publishAVideo = asyncHandler(async (req, res) => {
