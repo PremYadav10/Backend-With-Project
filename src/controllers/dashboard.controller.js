@@ -61,7 +61,9 @@ const getChannelVideos = asyncHandler(async (req, res) => {
                                      .sort({ createdAt: -1 }); // optional: most recent first
 
     if (!channelVideos.length) {
-        throw new ApiError(404, "No Video Found");
+        return res.status(204).json(
+            new ApiResponse(200, [], "No videos found for this channel")
+        );
     }
 
     res.status(200).json(

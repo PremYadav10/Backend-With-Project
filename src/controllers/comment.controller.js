@@ -31,19 +31,24 @@ const getVideoComments = asyncHandler(async (req, res) => {
 
 const addComment = asyncHandler(async (req, res) => {
     // TODO: add a comment to a video
-    const videoId = req.params
-    const userId = req.user.id
+    const {videoId} = req.params
+    const {userId} = req.user._id
 
-    const commentContent = req.body
+    if(! isValidObjectId(videoId)){
+        throw new ApiError(400,"Invalid video ID")
+    }
 
-    if(!commentContent){
+    const {content} = req.body 
+  
+
+    if(!content){
         throw new ApiError(400,
             "comment content is required"
         )
     }
 
     const comment = await Comment.create({
-        content:commentContent.content,
+        content:content,
         video:videoId,
         owner:userId
     })
@@ -64,17 +69,21 @@ const addComment = asyncHandler(async (req, res) => {
 
 const updateComment = asyncHandler(async (req, res) => {
     // TODO: update a comment
-    const commentId = req.params
-    const newContent = req.body
+    const {commentId} = req.params
+    const {content} = req.body
+
+    if(!content){
+        throw new ApiError(400,"comment content is required")
+    }
 
     if(!isValidObjectId(commentId)){
         throw new ApiError(400,"invalid comment ID")
     }
 
-    const updatedComment = await Comment.findByIdAndUpdate(
+    const updateComment = await Comment.findByIdAndUpdate(
         commentId,
         {
-            content : newContent.content
+            content : content
         },
         {
             new:true
@@ -98,7 +107,7 @@ const updateComment = asyncHandler(async (req, res) => {
 
 const deleteComment = asyncHandler(async (req, res) => {
     // TODO: delete a comment
-    const commentId = req.params
+    const {commentId} = req.params
 
     if(!isValidObjectId(commentId)){
         throw new ApiError(400,"Invalid comment id")
