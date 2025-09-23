@@ -47,7 +47,9 @@ const getAllVideos = asyncHandler(async (req, res) => {
                 title: 1,
                 description: 1,
                 views: 1,
+                thumbnail: 1,
                 createdAt: 1,
+                duration: 1,
                 "owner._id": 1,
                 "owner.username": 1,
                 "owner.avatar": 1
@@ -95,10 +97,12 @@ const publishAVideo = asyncHandler(async (req, res) => {
             "title and description are required !!",
         )
     }
+    
 
     const videoFileLocalPath = await req.files?.videoFile[0]?.path
-    //console.log(req.files)
+    
     const thumbnailLocalPath = await req.files?.thumbnail[0]?.path
+
 
     if(!(videoFileLocalPath && thumbnailLocalPath)){
         throw new ApiError(401,
@@ -106,8 +110,9 @@ const publishAVideo = asyncHandler(async (req, res) => {
         )
     }
 
-    const videoFile = await uploadOnCloudinary(videoFileLocalPath)
+    const videoFile = await uploadOnCloudinary(videoFileLocalPath)    
     const thumbnail = await uploadOnCloudinary(thumbnailLocalPath)
+
 
     if(!(videoFile && thumbnail)){
         throw new ApiError(500,
@@ -150,7 +155,32 @@ const getVideoById = asyncHandler(async (req, res) => {
         throw new ApiError(400,"Invalid videoId")
     }
 
-    const video = await Video.findById(videoId)
+    //const video = await Video.findById(videoId)
+    const video = await Video.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(videoId) } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner"
+            }
+        },
+        { $unwind: "$owner" },
+        {
+            $project: {
+                title: 1,
+                description: 1,
+                views: 1,
+                thumbnail: 1,
+                createdAt: 1,
+                duration: 1,
+                "owner._id": 1,
+                "owner.username": 1,
+                "owner.avatar": 1
+            }
+        }
+    ])
 
     if(!video){
         throw new ApiError(500,"error while getVideoById , video is not available")
