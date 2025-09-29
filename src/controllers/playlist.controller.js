@@ -39,14 +39,18 @@ const createPlaylist = asyncHandler(async (req, res) => {
 
 const getUserPlaylists = asyncHandler(async (req, res) => {
     const {userId} = req.params
-    //TODO: get user playlists
 
+    if (!isValidObjectId(userId)) {
+        throw new ApiError(400,"Ivalide user id")
+    }
+
+    //TODO: get user playlists
     const playlists = await Playlist.find(
         {owner:userId}
     )
 
     if(!playlists.length){
-        throw new ApiError(404,"No playlists exist")
+        return new ApiResponse(204,{},"No playlists exist")
     }
 
     res.status(200)
@@ -59,29 +63,223 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
         )
 })
 
+// const getPlaylistById = asyncHandler(async (req, res) => {
+//     const { playlistId } = req.params;
+
+//     if (!isValidObjectId(playlistId)) {
+//         throw new ApiError(400, "Invalid Playlist Id");
+//     }
+
+//     const playlist = await Playlist.aggregate([
+//         {
+//             $match: { _id: new mongoose.Types.ObjectId(playlistId) }
+//         },
+//         {
+//             $lookup: {
+//                 from: "videos", // video collection
+//                 localField: "videos",
+//                 foreignField: "_id",
+//                 as: "videoDetails"
+//             }
+//         },
+//         {
+//             $unwind: {
+//                 path: "$videoDetails",
+//                 preserveNullAndEmptyArrays: true
+//             }
+//         },
+//         {
+//             $lookup: {
+//                 from: "users", // user collection
+//                 localField: "videoDetails.owner",
+//                 foreignField: "_id",
+//                 as: "videoOwner"
+//             }
+//         },
+//         {
+//             $unwind: {
+//                 path: "$videoOwner",
+//                 preserveNullAndEmptyArrays: true
+//             }
+//         },
+//         {
+//             $project: {
+//                 _id: 1,
+//                 name: 1,
+//                 description: 1,
+//                 createdAt: 1,
+//                 updatedAt: 1,
+//                 "videoDetails._id": 1,
+//                 "videoDetails.title": 1,
+//                 "videoDetails.description": 1,
+//                 "videoDetails.thumbnail": 1,
+//                 "videoDetails.duration": 1,
+//                 "videoDetails.views": 1,
+//                 "videoDetails.createdAt": 1,
+//                 owner: {
+//                     _id: "$videoOwner._id",
+//                     username: "$videoOwner.username",
+//                     avatar: "$videoOwner.avatar"
+//                 }
+//             }
+//         },
+//         {
+//             $group: {
+//                 _id: "$_id",
+//                 name: { $first: "$name" },
+//                 description: { $first: "$description" },
+//                 createdAt: { $first: "$createdAt" },
+//                 updatedAt: { $first: "$updatedAt" },
+//                 videos: {
+//                     $push: {
+//                         _id: "$videoDetails._id",
+//                         title: "$videoDetails.title",
+//                         description: "$videoDetails.description",
+//                         thumbnail: "$videoDetails.thumbnail",
+//                         duration: "$videoDetails.duration",
+//                         views: "$videoDetails.views",
+//                         createdAt: "$videoDetails.createdAt",
+//                         owner: "$owner"
+//                     }
+//                 }
+//             }
+//         }
+//     ]);
+
+//     if (!playlist || playlist.length === 0) {
+//         throw new ApiError(404, "No Playlist found or error fetching playlist");
+//     }
+
+//     res.status(200).json(
+//         new ApiResponse(200, playlist[0], "Playlist fetched successfully")
+//     );
+// });
+
+
 const getPlaylistById = asyncHandler(async (req, res) => {
-    const {playlistId} = req.params
-    //TODO: get playlist by id
+    const { playlistId } = req.params;
 
-    if(!isValidObjectId(playlistId)){
-        throw new ApiError(400,"Invalid Playlist Id")
+    if (!isValidObjectId(playlistId)) {
+        throw new ApiError(400, "Invalid Playlist Id");
     }
 
-    const playlist = await Playlist.findById(playlistId)
+    const playlistResult = await Playlist.aggregate([
+        {
+            $match: { _id: new mongoose.Types.ObjectId(playlistId) }
+        },
+        // --- 1. Get Video Details ---
+        {
+            $lookup: {
+                from: "videos",
+                localField: "videos",
+                foreignField: "_id",
+                as: "videoDetails"
+            }
+        },
+        // --- 2. Unwind Videos (Crucial: Keep the playlist document even if videos array is empty) ---
+        {
+            $unwind: {
+                path: "$videoDetails",
+                preserveNullAndEmptyArrays: true // This is required to keep the playlist metadata
+            }
+        },
+        // --- 3. Lookup Video Owner ---
+        {
+            $lookup: {
+                from: "users",
+                localField: "videoDetails.owner",
+                foreignField: "_id",
+                as: "videoOwner"
+            }
+        },
+        {
+            $unwind: {
+                path: "$videoOwner",
+                preserveNullAndEmptyArrays: true
+            }
+        },
+        // --- 4. Project Final Fields & Create a single Video Object ---
+        {
+            $project: {
+                _id: 1,
+                name: 1,
+                description: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                // Create a clean video object, but ONLY if videoDetails exists.
+                // This prevents partial/empty documents from causing issues in $group.
+                video: {
+                    $cond: {
+                        // Check if the videoDetails field is null (which happens when the videos array was empty)
+                        if: { $ne: ["$videoDetails", null] }, 
+                        then: {
+                            _id: "$videoDetails._id",
+                            title: "$videoDetails.title",
+                            description: "$videoDetails.description",
+                            thumbnail: "$videoDetails.thumbnail",
+                            duration: "$videoDetails.duration",
+                            views: "$videoDetails.views",
+                            createdAt: "$videoDetails.createdAt",
+                            owner: {
+                                _id: "$videoOwner._id",
+                                username: "$videoOwner.username",
+                                avatar: "$videoOwner.avatar"
+                            }
+                        },
+                        else: "$$REMOVE" // Remove the entire 'video' field if videoDetails is null
+                    }
+                }
+            }
+        },
+        // --- 5. Group back and Push Valid Videos ---
+        {
+            $group: {
+                _id: "$_id",
+                name: { $first: "$name" },
+                description: { $first: "$description" },
+                createdAt: { $first: "$createdAt" },
+                updatedAt: { $first: "$updatedAt" },
+                // Push only the VALID 'video' objects created in the $project stage.
+                // When 'video' is removed by the $cond, it won't be pushed.
+                videos: { $push: "$video" }
+            }
+        },
+        // --- 6. Final cleanup of the 'videos' array ---
+        {
+             $project: {
+                _id: 1,
+                name: 1,
+                description: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                // Use $filter to remove any residual null/empty objects if they exist
+                videos: {
+                    $filter: {
+                        input: "$videos",
+                        as: "video",
+                        cond: { $ne: ["$$video", {}] } // Check that the video object is not empty
+                    }
+                }
+            }
+        }
+    ]);
 
-    if(!playlist){
-        throw new ApiError(404,"No Playlist Find || Error while fetching the playlist")
+    const playlist = playlistResult[0]; // Get the single playlist object
+
+    if (!playlist) { // Check if no playlist was found by ID
+        throw new ApiError(404, "No Playlist found");
     }
 
-    res.status(200)
-        .json(
-            new ApiResponse(200,
-                playlist,
-                "playlist fatched successfully"
-            )
-        )
+    // Ensure the videos array is not empty if the original playlist was empty (should be handled by aggregation now)
+    if (!playlist.videos || playlist.videos.length === 0) {
+        playlist.videos = [];
+    }
 
-})
+    res.status(200).json(
+        new ApiResponse(200, playlist, "Playlist fetched successfully")
+    );
+});
+
 
 const addVideoToPlaylist = asyncHandler(async (req, res) => {
     const {playlistId, videoId} = req.params

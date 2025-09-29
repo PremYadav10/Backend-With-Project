@@ -6,6 +6,7 @@ import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 import {uploadOnCloudinary} from "../utils/cloudinary.js"
 
+
 const getAllVideos = asyncHandler(async (req, res) => {
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query
         //TODO: get all videos based on query, sort, pagination
@@ -147,15 +148,47 @@ const publishAVideo = asyncHandler(async (req, res) => {
     
 })
 
-const getVideoById = asyncHandler(async (req, res) => {
-    const { videoId } = req.params
-    //TODO: get video by id
 
-    if(!isValidObjectId(videoId)){
-        throw new ApiError(400,"Invalid videoId")
+
+const getVideoById = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid videoId");
     }
 
-    //const video = await Video.findById(videoId)
+    // --- 1. Increment Views and Update History (Non-Blocking) ---
+    // Update the video views count for everyone (logged in or not)
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+
+    // Check if the user is logged in (req.user is set by optionalJWT)
+    if (req.user?._id) {
+        const userId = req.user._id;
+
+        // A. PULL: Remove the videoId if it exists in the history (ensures no duplicates)
+        await User.findByIdAndUpdate(
+            userId,
+            {
+                $pull: { watchHistory: videoId } 
+            }
+        );
+
+        // B. PUSH: Add the videoId back to the front of the array (sets it as most recent)
+        await User.findByIdAndUpdate(
+            userId,
+            {
+                $push: {
+                    watchHistory: {
+                        $each: [videoId],
+                        $position: 0 
+                    }
+                }
+            }
+        );
+    }
+    
+    // --- 2. Fetch Video Details (Your existing aggregation) ---
+    // The aggregation logic remains the same, but it now runs after the history update.
     const video = await Video.aggregate([
         { $match: { _id: new mongoose.Types.ObjectId(videoId) } },
         {
@@ -163,37 +196,46 @@ const getVideoById = asyncHandler(async (req, res) => {
                 from: "users",
                 localField: "owner",
                 foreignField: "_id",
-                as: "owner"
-            }
+                as: "channel",
+                pipeline: [
+                    {
+                        $project: {
+                            _id: 1,
+                            username: 1,
+                            avatar: 1,
+                            // Note: If you want the actual subscriber count, 
+                            // you need a $lookup on the subscriptions collection here.
+                            // The current 'subscribers: 1' might just pull a field if it exists.
+                        },
+                    },
+                ],
+            },
         },
-        { $unwind: "$owner" },
+        { $unwind: "$channel" },
         {
             $project: {
+                _id: 1,
                 title: 1,
                 description: 1,
-                views: 1,
+                views: 1, // Note: This views count is the value *before* the increment finished.
                 thumbnail: 1,
-                createdAt: 1,
+                videoFile: 1,
                 duration: 1,
-                "owner._id": 1,
-                "owner.username": 1,
-                "owner.avatar": 1
-            }
-        }
-    ])
+                createdAt: 1,
+                channel: 1,
+            },
+        },
+    ]);
 
-    if(!video){
-        throw new ApiError(500,"error while getVideoById , video is not available")
+    if (!video || video.length === 0) {
+        throw new ApiError(404, "Video not found");
     }
 
-    res.status(200)
-    .json(
-        new ApiResponse(200,
-            video,
-            "Video are fatched"
-        )
-    )
-})
+    res.status(200).json(
+        new ApiResponse(200, video[0], "Video fetched successfully")
+    );
+});
+
 
 const updateVideo = asyncHandler(async (req, res) => {
     const { videoId } = req.params

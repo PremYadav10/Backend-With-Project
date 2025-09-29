@@ -1,137 +1,135 @@
-import mongoose, { Aggregate, isValidObjectId } from "mongoose"
-import {Comment} from "../models/comment.model.js"
-import {ApiError} from "../utils/ApiError.js"
-import {ApiResponse} from "../utils/ApiResponse.js"
-import {asyncHandler} from "../utils/asyncHandler.js"
-import { getVideoById } from "./video.controller.js"
+import mongoose, { isValidObjectId } from "mongoose"
+import { Comment } from "../models/comment.model.js"
+import { ApiError } from "../utils/ApiError.js"
+import { ApiResponse } from "../utils/ApiResponse.js"
+import { asyncHandler } from "../utils/asyncHandler.js"
 
+// 📌 Get Comments
 const getVideoComments = asyncHandler(async (req, res) => {
-    //TODO: get all comments for a video
-    const {videoId} = req.params
-    const {page = 1, limit = 10} = req.query
+    const { videoId } = req.params
+    const { page = 1, limit = 10 } = req.query
 
     const skip = (parseInt(page) - 1) * parseInt(limit)
-    const comments = await Comment.find({video:videoId})
-        .skip(skip)
-        .limit(limit)
-        .populate("owner", "username avatar")
+
+    const comments = await Comment.aggregate([
+        {
+            $match: { video: new mongoose.Types.ObjectId(videoId) }
+        },
+        {
+            $sort: { createdAt: -1 } // newest first
+        },
+        { $skip: skip },
+        { $limit: parseInt(limit) },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner"
+            }
+        },
+        { $unwind: "$owner" },
+        {
+            $project: {
+                content: 1,
+                createdAt: 1,
+                "owner._id": 1,
+                "owner.username": 1,
+                "owner.avatar": 1
+            }
+        }
+    ])
 
     if (comments.length === 0) {
-    throw new ApiError(404, "No comments found for this video")
+        return res.status(200).json(
+            new ApiResponse(200, [], "No comments found for this video")
+        )
     }
 
-    res.status(200)
-        .json(
-            new ApiResponse(200,
-                comments,
-                "Comments Fetched Successfully"
-            )
-        )   
+    res.status(200).json(
+        new ApiResponse(200, comments, "Comments fetched successfully")
+    )
 })
 
+// 📌 Add Comment
 const addComment = asyncHandler(async (req, res) => {
-    // TODO: add a comment to a video
-    const {videoId} = req.params
-    const {userId} = req.user._id
+    const { videoId } = req.params
 
-    if(! isValidObjectId(videoId)){
-        throw new ApiError(400,"Invalid video ID")
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid video ID")
     }
 
-    const {content} = req.body 
-  
+    const { content } = req.body
 
-    if(!content){
-        throw new ApiError(400,
-            "comment content is required"
-        )
+    if (!content) {
+        throw new ApiError(400, "comment content is required")
     }
 
     const comment = await Comment.create({
-        content:content,
-        video:videoId,
-        owner:userId
-    })
-    
-    if(!comment){
-        throw new ApiError(500,"Error while uploding comment")
+        content,
+        video: videoId,
+        owner: req.user?._id
+    })    
+
+    if (!comment) {
+        throw new ApiError(500, "Error while uploading comment")
     }
 
-    res
-        .status(200)
-        .json(
-            new ApiResponse(200,
-                comment,
-                "comment uploaded successfully"
-            )
-        )
+    res.status(200).json(
+        new ApiResponse(200, comment, "comment uploaded successfully")
+    )
 })
 
+// 📌 Update Comment
 const updateComment = asyncHandler(async (req, res) => {
-    // TODO: update a comment
-    const {commentId} = req.params
-    const {content} = req.body
+    const { commentId } = req.params
+    const { content } = req.body
 
-    if(!content){
-        throw new ApiError(400,"comment content is required")
+    if (!content) {
+        throw new ApiError(400, "comment content is required")
     }
 
-    if(!isValidObjectId(commentId)){
-        throw new ApiError(400,"invalid comment ID")
+    if (!isValidObjectId(commentId)) {
+        throw new ApiError(400, "invalid comment ID")
     }
 
-    const updateComment = await Comment.findByIdAndUpdate(
+    const updatedComment = await Comment.findByIdAndUpdate(
         commentId,
-        {
-            content : content
-        },
-        {
-            new:true
-        }
+        { content },
+        { new: true }
     )
 
-    if(!updateComment){
-        throw new ApiError(500,"Error while updating the comment ", 
-            Error.message
-        )
+    if (!updatedComment) {
+        throw new ApiError(500, "Error while updating the comment")
     }
 
-    res.status(200)
-        .json(
-            new ApiResponse(200,
-                updateComment,
-                "comment is updated"
-            )
-        )
+    res.status(200).json(
+        new ApiResponse(200, updatedComment, "comment is updated")
+    )
 })
 
+// 📌 Delete Comment
 const deleteComment = asyncHandler(async (req, res) => {
-    // TODO: delete a comment
-    const {commentId} = req.params
+    const { commentId } = req.params
 
-    if(!isValidObjectId(commentId)){
-        throw new ApiError(400,"Invalid comment id")
+    if (!isValidObjectId(commentId)) {
+        throw new ApiError(400, "Invalid comment id")
     }
 
     const deletedComment = await Comment.findByIdAndDelete(commentId)
 
-    if(!deleteComment){
-        throw new ApiError(500,"Error while deleting the comment")
+    if (!deletedComment) {
+        throw new ApiError(500, "Error while deleting the comment")
     }
 
-    res.status(200)
-        .json(
-            new ApiResponse(
-                200,
-                {},
-                "comment deleted successfully"
-            )
-        )
+    res.status(200).json(
+        new ApiResponse(200, {}, "comment deleted successfully")
+    )
 })
 
 export {
-    getVideoComments, 
-    addComment, 
+    getVideoComments,
+    addComment,
     updateComment,
-     deleteComment
+    deleteComment
 }

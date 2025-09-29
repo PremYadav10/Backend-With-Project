@@ -51,7 +51,6 @@ const getChannelStats = asyncHandler(async (req, res) => {
     );
 });
 
-
 const getChannelVideos = asyncHandler(async (req, res) => {
     // Get all the videos uploaded by the channel
     const channelId = req.user._id;
@@ -70,7 +69,6 @@ const getChannelVideos = asyncHandler(async (req, res) => {
         new ApiResponse(200, channelVideos, "Videos Fetched Successfully")
     );
 });
-
 
 export {
     getChannelStats, 

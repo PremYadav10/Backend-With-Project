@@ -9,14 +9,21 @@ import {
     updateVideo,
 } from "../controllers/video.controller.js"
 import { varifyJWT } from "../middlewares/auth.middleware.js"
+import {optionalJWT} from "../middlewares/optimalAuth.middleware.js"
 import {upload} from "../middlewares/multer.middleware.js"
 
 const router = Router();
+
+router.route("/").get(getAllVideos)
+
+// Public route that needs user context for history tracking
+router.route("/:videoId").get(optionalJWT,getVideoById)
+
+
 router.use(varifyJWT); // Apply verifyJWT middleware to all routes in this file
 
 router
     .route("/")
-    .get(getAllVideos)
     .post(
         upload.fields([
             {
@@ -34,7 +41,6 @@ router
 
 router
     .route("/:videoId")
-    .get(getVideoById)
     .delete(deleteVideo)
     .patch(upload.single("thumbnail"), updateVideo);
 
