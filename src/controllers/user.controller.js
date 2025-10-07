@@ -1,6 +1,7 @@
 import {asyncHandler} from '../utils/asyncHandler.js';
 import {ApiError} from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
+import { Playlist } from "../models/playlist.model.js"
 import {Subscription} from "../models/subscriptions.model.js"
 import {uploadOnCloudinary,deleteFromCloudinary} from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponse.js"
@@ -82,6 +83,20 @@ const registerUser = asyncHandler(async (req,res)=>{
         password,
         email
     })
+
+    try {
+        await Playlist.create({
+            owner: user._id, // Link to the newly created user
+            name: "Watch Later",
+            description: "System-managed list for later viewing. (Do Not Delete)",
+           // isPublic: false, // Default to private
+           videos: [],
+        });
+        console.log(`Watch Later playlist created for new user: ${user.username}`);
+    } catch (playlistError) {
+        // Log the playlist error but proceed, as the user account is still valid
+        console.error(`Failed to create Watch Later playlist for user ${user._id}:`, playlistError);
+    }
 
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"

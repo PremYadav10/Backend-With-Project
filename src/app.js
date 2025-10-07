@@ -43,7 +43,6 @@ app.use("/api/v1/playlist", playlistRouter)
 app.use("/api/v1/subscriptions", subscriptionRouter)
 app.use("/api/v1/dashboard", dashboardRouter)
 
-
 export default app;
 
 // http://localhost:8000/api/v1/users
