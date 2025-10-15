@@ -4,7 +4,6 @@ import {Playlist} from "../models/playlist.model.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
-import { json } from "express"
 
 
 const createPlaylist = asyncHandler(async (req, res) => {
@@ -407,6 +406,30 @@ const updatePlaylist = asyncHandler(async (req, res) => {
 
 })
 
+
+const getWatchLaterPlaylistId = asyncHandler(async (req, res) => {
+    const userId = req.user._id; 
+
+    if (!userId) { // 👈 ADD THIS CHECK
+        throw new ApiError(401, "User not authenticated for this playlist fetch.");
+    }
+
+    const watchLaterPlaylist = await Playlist.findOne({
+        owner: userId,
+        name: "Watch Later" // The unique name we set during registration
+    }).select("_id"); // Only select the ID
+
+    if (!watchLaterPlaylist) {
+        // This shouldn't happen after registration, but it's a safety check
+        return res.status(404).json(new ApiResponse(404, null, "Watch Later playlist not found"));
+    }
+
+    // Return just the ID
+    return res.status(200).json(
+        new ApiResponse(200, watchLaterPlaylist._id, "Watch Later ID fetched successfully")
+    );
+});
+
 export {
     createPlaylist,
     getUserPlaylists,
@@ -414,5 +437,6 @@ export {
     addVideoToPlaylist,
     removeVideoFromPlaylist,
     deletePlaylist,
-    updatePlaylist
+    updatePlaylist,
+    getWatchLaterPlaylistId
 }

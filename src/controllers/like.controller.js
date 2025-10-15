@@ -99,7 +99,7 @@ const getLikedVideos = asyncHandler(async (req, res) => {
     .populate("video", "title thumbnail description") // get video details
 
     if (likedVideos.length === 0) {
-        throw new ApiError(404, "No liked videos found")
+        return new ApiResponse(204, [] , "No liked videos found")
     }
 
     res.status(200).json(
