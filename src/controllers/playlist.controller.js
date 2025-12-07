@@ -5,7 +5,6 @@ import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
 
-
 const createPlaylist = asyncHandler(async (req, res) => {
     const {name, description} = req.body
     //TODO: create playlist
@@ -408,27 +407,31 @@ const updatePlaylist = asyncHandler(async (req, res) => {
 
 
 const getWatchLaterPlaylistId = asyncHandler(async (req, res) => {
-    const userId = req.user._id; 
+  // req.user must exist because route uses varifyJWT middleware
+  const userId = req.user?._id;
 
-    if (!userId) { // 👈 ADD THIS CHECK
-        throw new ApiError(401, "User not authenticated for this playlist fetch.");
-    }
+  if (!userId) {
+    throw new ApiError(401, "User not authenticated for this playlist fetch.");
+  }
 
-    const watchLaterPlaylist = await Playlist.findOne({
-        owner: userId,
-        name: "Watch Later" // The unique name we set during registration
-    }).select("_id"); // Only select the ID
+  // Find the Watch Later playlist — return id + videos array
+  const watchLater = await Playlist.findOne({
+    owner: userId,
+    name: "Watch Later",
+  }).select("_id videos").lean();
 
-    if (!watchLaterPlaylist) {
-        // This shouldn't happen after registration, but it's a safety check
-        return res.status(404).json(new ApiResponse(404, null, "Watch Later playlist not found"));
-    }
+  // If not found, return 200 with null id and empty videos array (safer for frontend)
+  if (!watchLater) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { _id: null, videos: [] }, "No Watch Later playlist found"));
+  }
 
-    // Return just the ID
-    return res.status(200).json(
-        new ApiResponse(200, watchLaterPlaylist._id, "Watch Later ID fetched successfully")
-    );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { _id: watchLater._id.toString(), videos: watchLater.videos || [] }, "Watch Later fetched successfully"));
 });
+
 
 export {
     createPlaylist,
